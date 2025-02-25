@@ -1,0 +1,7 @@
+[unstable]
+build-std = ["core", "compiler_builtins", "alloc"]
+build-std-features = ["compiler-builtins-mem"]
+
+[build]
+target = "aarch64-unknown-none"
+rustflags = ["-Ctarget-cpu=cortex-a53"]

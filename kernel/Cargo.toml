@@ -1,0 +1,8 @@
+[package]
+name = "kernel"
+version = "0.1.0"
+edition = "2021"
+authors = ["Zakki <zakki0925224@gmail.com>"]
+description = "A hobby operating system for Raspberry Pi 3 Model B, written in Rust."
+
+[dependencies]
