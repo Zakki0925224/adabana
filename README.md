@@ -17,5 +17,5 @@ $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 $ git clone https://github.com/Zakki0925224/adabana.git
 $ cd adabana
-$ python3 ./taskpy run
+$ python3 ./task.py run
 ```

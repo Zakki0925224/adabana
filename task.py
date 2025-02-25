@@ -29,6 +29,10 @@ def qemu_cmd() -> str:
     return f"{QEMU_ARCH} -M {QEMU_MACHINE_TYPE} {qemu_args} {qemu_drives} {qemu_devices} -kernel {OUTPUT_DIR}/{KERNEL_FILE}"
 
 
+def git_submodule_update_cmd(path: str) -> str:
+    return f"git submodule update --init --recursive {path}"
+
+
 def run_cmd(
     cmd: str,
     dir: str = "./",
@@ -51,6 +55,7 @@ def build_raspbootin():
     d = f"./{THIRD_PARTY_DIR}/{RASPBOOTIN_DIR}"
 
     init()
+    run_cmd(git_submodule_update_cmd(d))
     run_cmd("make", d)
     run_cmd(f"cp {d}/raspbootin/kernel.img {OUTPUT_DIR}/raspbootin.img")
     run_cmd(f"cp {d}/raspbootcom/raspbootcom {OUTPUT_DIR}/raspbootcom")
