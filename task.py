@@ -1,9 +1,10 @@
-import os
 import subprocess
 import sys
 
 OUTPUT_DIR = "build"
 KERNEL_DIR = "kernel"
+THIRD_PARTY_DIR = "third-party"
+RASPBOOTIN_DIR = "raspbootin"
 
 KERNEL_FILE = "kernel.elf"
 
@@ -19,12 +20,14 @@ QEMU_ARGS = [
     "-monitor telnet::5678,server,nowait",
 ]
 
+
 def qemu_cmd() -> str:
     qemu_args = " ".join(QEMU_ARGS)
     qemu_drives = " ".join(QEMU_DRIVES)
     qemu_devices = " ".join(QEMU_DEVICES)
 
     return f"{QEMU_ARCH} -M {QEMU_MACHINE_TYPE} {qemu_args} {qemu_drives} {qemu_devices} -kernel {OUTPUT_DIR}/{KERNEL_FILE}"
+
 
 def run_cmd(
     cmd: str,
@@ -38,9 +41,20 @@ def run_cmd(
     if exit_code != 0 and not ignore_error:
         exit(exit_code)
 
+
 # tasks
 def init():
     run_cmd(f"mkdir -p {OUTPUT_DIR}")
+
+
+def build_raspbootin():
+    d = f"./{THIRD_PARTY_DIR}/{RASPBOOTIN_DIR}"
+
+    init()
+    run_cmd("make", d)
+    run_cmd(f"cp {d}/raspbootin/kernel.img {OUTPUT_DIR}/raspbootin.img")
+    run_cmd(f"cp {d}/raspbootcom/raspbootcom {OUTPUT_DIR}/raspbootcom")
+
 
 def build_kernel():
     d = f"./{KERNEL_DIR}"
@@ -49,21 +63,29 @@ def build_kernel():
     run_cmd("cargo build", d)
     run_cmd(f"cp ./target/aarch64-unknown-none/debug/kernel {OUTPUT_DIR}/{KERNEL_FILE}")
 
+
 def build():
+    build_raspbootin()
     build_kernel()
 
+
 def run():
+    build()
     run_cmd(qemu_cmd())
+
 
 def monitor():
     run_cmd("telnet localhost 5678")
+
 
 def clean():
     run_cmd(f"rm -rf {OUTPUT_DIR}")
     run_cmd("cargo clean")
 
+
 TASKS = [
     init,
+    build_raspbootin,
     build_kernel,
     build,
     run,
