@@ -1,6 +1,6 @@
 # adabana
 
-**adabana** is a hobby operating system for Raspberry Pi 3 Model B, written in Rust.
+**adabana** (Japanese: "徒花") is a hobby operating system for Raspberry Pi 3 Model B, written in Rust.
 
 ## How to run
 

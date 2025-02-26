@@ -6,7 +6,7 @@
     "linker": "rust-lld",
     "linker-is-gnu": true,
     "pre-link-args": {
-        "ld.lld": ["--script=link.ld"]
+        "ld.lld": ["--script=kernel/link.ld"]
     },
     "llvm-target": "aarch64-unknown-none",
     "features": "+a53,+strict-align",
