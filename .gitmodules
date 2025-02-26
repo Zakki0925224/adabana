@@ -1,3 +1,0 @@
-[submodule "third-party/raspbootin"]
-	path = third-party/raspbootin
-	url = https://github.com/mrvn/raspbootin

@@ -3,21 +3,28 @@ import sys
 
 OUTPUT_DIR = "build"
 KERNEL_DIR = "kernel"
+DUMP_DIR = "dump"
 THIRD_PARTY_DIR = "third-party"
-RASPBOOTIN_DIR = "raspbootin"
 
-KERNEL_FILE = "kernel.elf"
+KERNEL_FILE = "kernel8.img"
+KERNEL_OUT = "target/aarch64-raspi3-kernel/debug/kernel"
+
+ARCH_TOOLCHAIN = "aarch64-linux-gnu-"
 
 QEMU_ARCH = "qemu-system-aarch64"
 QEMU_MACHINE_TYPE = "raspi3b"
 QEMU_DEVICES = []
 QEMU_DRIVES = []
 QEMU_ARGS = [
+    f"-M {QEMU_MACHINE_TYPE}",
+    f"-kernel {OUTPUT_DIR}/{KERNEL_FILE}",
     "-no-reboot",
     "-no-shutdown",
     "-m 1G",
-    "-serial mon:stdio",
+    "-display none",
+    "-serial null -serial stdio",  # PL011 -> Mini UART
     "-monitor telnet::5678,server,nowait",
+    "-gdb tcp::3333",
 ]
 
 
@@ -26,7 +33,7 @@ def qemu_cmd() -> str:
     qemu_drives = " ".join(QEMU_DRIVES)
     qemu_devices = " ".join(QEMU_DEVICES)
 
-    return f"{QEMU_ARCH} -M {QEMU_MACHINE_TYPE} {qemu_args} {qemu_drives} {qemu_devices} -kernel {OUTPUT_DIR}/{KERNEL_FILE}"
+    return f"{QEMU_ARCH} {qemu_args} {qemu_drives} {qemu_devices}"
 
 
 def git_submodule_update_cmd(path: str) -> str:
@@ -51,26 +58,17 @@ def init():
     run_cmd(f"mkdir -p {OUTPUT_DIR}")
 
 
-def build_raspbootin():
-    d = f"./{THIRD_PARTY_DIR}/{RASPBOOTIN_DIR}"
-
-    init()
-    run_cmd(git_submodule_update_cmd(d))
-    run_cmd("make", d)
-    run_cmd(f"cp {d}/raspbootin/kernel.img {OUTPUT_DIR}/raspbootin.img")
-    run_cmd(f"cp {d}/raspbootcom/raspbootcom {OUTPUT_DIR}/raspbootcom")
-
-
 def build_kernel():
     d = f"./{KERNEL_DIR}"
 
     init()
     run_cmd("cargo build", d)
-    run_cmd(f"cp ./target/aarch64-unknown-none/debug/kernel {OUTPUT_DIR}/{KERNEL_FILE}")
+    run_cmd(
+        f"{ARCH_TOOLCHAIN}objcopy --strip-all -O binary {KERNEL_OUT} {OUTPUT_DIR}/{KERNEL_FILE}"
+    )
 
 
 def build():
-    build_raspbootin()
     build_kernel()
 
 
@@ -79,22 +77,40 @@ def run():
     run_cmd(qemu_cmd())
 
 
+def run_with_gdb():
+    build()
+    run_cmd(f"{qemu_cmd()} -S")
+
+
 def monitor():
     run_cmd("telnet localhost 5678")
 
 
+def gdb():
+    run_cmd(f'gdb-multiarch {KERNEL_OUT} -ex "target remote :3333"')
+
+
+def dump():
+    build()
+    run_cmd(f"mkdir -p {DUMP_DIR}")
+    run_cmd(f"{ARCH_TOOLCHAIN}objdump -d {KERNEL_OUT} > {DUMP_DIR}/dump_kernel.txt")
+
+
 def clean():
     run_cmd(f"rm -rf {OUTPUT_DIR}")
+    run_cmd(f"rm -rf {DUMP_DIR}")
     run_cmd("cargo clean")
 
 
 TASKS = [
     init,
-    build_raspbootin,
     build_kernel,
     build,
     run,
+    run_with_gdb,
     monitor,
+    gdb,
+    dump,
     clean,
 ]
 
