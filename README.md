@@ -11,3 +11,7 @@ $ cd adabana
 # install required packages before running (TODO)
 $ python3 ./task.py run
 ```
+
+## References
+
+-   https://github.com/wizofe/rust-raspi3-tutorial
