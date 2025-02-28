@@ -1,6 +1,8 @@
-use crate::{addr::MmioAddress, asm, gpio};
+use crate::{addr::MmioAddress, asm, error::Result, gpio, mutex::Mutex};
 
 const MMIO_BASE_UART1: MmioAddress = MmioAddress::new(0x215000);
+
+static mut MINI_UART: Mutex<MiniUart> = Mutex::new(MiniUart::new());
 
 struct IoRegister(MmioAddress);
 
@@ -61,7 +63,7 @@ impl IoRegister {
     }
 }
 
-pub struct MiniUart {
+struct MiniUart {
     io_register: IoRegister,
 }
 
@@ -76,7 +78,7 @@ impl MiniUart {
         &self.io_register
     }
 
-    pub fn init(&self) {
+    fn init(&self) {
         let io_register = self.io_register();
 
         io_register.write_aux_enables(0x01);
@@ -104,7 +106,7 @@ impl MiniUart {
         io_register.write_aux_mu_cntl(0x03); // enable TX and RX
     }
 
-    pub fn send(&self, c: char) {
+    fn send(&self, c: char) {
         if c == '\n' {
             self.send('\r');
         }
@@ -123,7 +125,7 @@ impl MiniUart {
         io_register.write_aux_mu_io(c as u32);
     }
 
-    pub fn receive(&self) -> char {
+    fn receive(&self) -> char {
         let io_register = self.io_register();
 
         // wait
@@ -144,9 +146,29 @@ impl MiniUart {
         c
     }
 
-    pub fn puts(&self, s: &str) {
+    fn puts(&self, s: &str) {
         for c in s.chars() {
             self.send(c);
         }
     }
+}
+
+pub fn init() -> Result<()> {
+    unsafe { MINI_UART.try_lock() }?.init();
+    Ok(())
+}
+
+pub fn receive() -> Result<char> {
+    let c = unsafe { MINI_UART.try_lock() }?.receive();
+    Ok(c)
+}
+
+pub fn send(c: char) -> Result<()> {
+    unsafe { MINI_UART.try_lock() }?.send(c);
+    Ok(())
+}
+
+pub fn puts(s: &str) -> Result<()> {
+    unsafe { MINI_UART.try_lock() }?.puts(s);
+    Ok(())
 }
