@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 
@@ -8,6 +9,7 @@ THIRD_PARTY_DIR = "third-party"
 
 KERNEL_FILE = "kernel8.img"
 KERNEL_OUT = "target/aarch64-raspi3-kernel/debug/kernel"
+DTB_FILE = "bcm2710-rpi-3-b.dtb"
 
 ARCH_TOOLCHAIN = "aarch64-linux-gnu-"
 
@@ -18,6 +20,7 @@ QEMU_DRIVES = []
 QEMU_ARGS = [
     f"-M {QEMU_MACHINE_TYPE}",
     f"-kernel {OUTPUT_DIR}/{KERNEL_FILE}",
+    f"-dtb {THIRD_PARTY_DIR}/{DTB_FILE}",
     "-no-reboot",
     "-no-shutdown",
     "-m 1G",
@@ -56,6 +59,14 @@ def run_cmd(
 # tasks
 def init():
     run_cmd(f"mkdir -p {OUTPUT_DIR}")
+    run_cmd(f"mkdir -p {THIRD_PARTY_DIR}")
+
+    # download DTB file
+    dtb_path = f"{THIRD_PARTY_DIR}/{DTB_FILE}"
+    if not os.path.exists(dtb_path):
+        run_cmd(
+            f"wget https://github.com/raspberrypi/firmware/raw/master/boot/{DTB_FILE} -O {dtb_path}"
+        )
 
 
 def build_kernel():

@@ -1,8 +1,10 @@
 use crate::{addr::MmioAddress, asm, error::Result, gpio, mutex::Mutex};
 
-const MMIO_BASE_UART1: MmioAddress = MmioAddress::new(0x215000);
-
 static mut MINI_UART: Mutex<MiniUart> = Mutex::new(MiniUart::new());
+
+fn mmio_base_uart1() -> MmioAddress {
+    MmioAddress::new(0x215000)
+}
 
 struct IoRegister(MmioAddress);
 
@@ -64,21 +66,24 @@ impl IoRegister {
 }
 
 struct MiniUart {
-    io_register: IoRegister,
+    io_register: Option<IoRegister>,
 }
 
 impl MiniUart {
     pub const fn new() -> Self {
-        Self {
-            io_register: IoRegister::new(MMIO_BASE_UART1),
+        Self { io_register: None }
+    }
+
+    fn io_register(&mut self) -> &IoRegister {
+        if self.io_register.is_none() {
+            let io_register = IoRegister::new(mmio_base_uart1());
+            self.io_register = Some(io_register);
         }
+
+        self.io_register.as_ref().unwrap()
     }
 
-    fn io_register(&self) -> &IoRegister {
-        &self.io_register
-    }
-
-    fn init(&self) {
+    fn init(&mut self) {
         let io_register = self.io_register();
 
         io_register.write_aux_enables(0x01);
@@ -106,7 +111,7 @@ impl MiniUart {
         io_register.write_aux_mu_cntl(0x03); // enable TX and RX
     }
 
-    fn send(&self, c: char) {
+    fn send(&mut self, c: char) {
         if c == '\n' {
             self.send('\r');
         }
@@ -125,7 +130,7 @@ impl MiniUart {
         io_register.write_aux_mu_io(c as u32);
     }
 
-    fn receive(&self) -> char {
+    fn receive(&mut self) -> char {
         let io_register = self.io_register();
 
         // wait
@@ -146,7 +151,7 @@ impl MiniUart {
         c
     }
 
-    fn puts(&self, s: &str) {
+    fn puts(&mut self, s: &str) {
         for c in s.chars() {
             self.send(c);
         }

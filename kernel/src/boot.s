@@ -11,6 +11,7 @@ _boot:
     b       1b
 
 master_cpu:
+    mov    x20, x0 // Save DTB address
     // If in EL2, switch to EL1
     mrs     x0, CurrentEL
     lsr     x0, x0, #2
@@ -40,6 +41,7 @@ bss_clear:
     b       bss_clear
 
 start_kernel:
+    mov x0, x20 // Restore DTB address
     // Jump to Rust code, should not return
     bl      kernel_main
 
