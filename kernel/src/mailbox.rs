@@ -1,4 +1,4 @@
-use crate::addr::MmioAddress;
+use crate::{addr::MmioAddress, error::Result};
 
 // https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface
 
@@ -26,6 +26,16 @@ fn read_mailbox_config() -> u32 {
     mmio_base_mailbox_videocore().offset(0x1c).read()
 }
 
+fn write_mailbox(mbox: &Mailbox, channel: Channel) {
+    let mbox_addr = mbox.inner_ptr() as u32;
+    assert!(mbox_addr & 0xf == 0);
+    let channel = channel as u32;
+    mmio_base_mailbox_videocore()
+        .offset(0x20)
+        .write(mbox_addr | channel);
+}
+
+#[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum Channel {
     PowerManagement = 0,
@@ -113,10 +123,34 @@ pub enum TagId {
 }
 
 #[repr(u32)]
-pub enum Status {
+pub enum TagStatus {
     Request = 0,
     Response = 0x80000000,
     ResponseError = 0x80000001,
+}
+
+pub const TAG_LAST: u32 = 0;
+
+#[repr(C)]
+pub struct Tag<const N: usize>([u32; N]);
+
+impl<const N: usize> Tag<N> {
+    pub fn new(id: TagId, status: TagStatus) -> Self {
+        assert!(N >= 4);
+
+        let mut tags = [0; N];
+        tags[0] = id as u32;
+        tags[1] = status as u32;
+        Self(tags)
+    }
+
+    pub fn slice(&self) -> &[u32] {
+        &self.0
+    }
+
+    pub fn slice_mut(&mut self) -> &mut [u32] {
+        &mut self.0
+    }
 }
 
 #[repr(C, align(16))]
@@ -127,19 +161,79 @@ impl Mailbox {
         Self([0; 36])
     }
 
-    fn buf(&self) -> *const u32 {
-        self.0.as_ptr()
+    pub fn inner_slice(&self) -> &[u32] {
+        &self.0
     }
 
-    fn buf_mut(&mut self) -> *mut u32 {
-        self.0.as_mut_ptr()
+    fn inner_slice_mut(&mut self) -> &mut [u32] {
+        &mut self.0
+    }
+
+    fn inner_ptr(&self) -> *const u32 {
+        self.inner_slice().as_ptr()
     }
 
     fn read_size(&self) -> u32 {
-        unsafe { *self.buf().offset(0x00) }
+        self.inner_slice()[0]
     }
 
     fn write_size(&mut self, size: u32) {
-        unsafe { *self.buf_mut().offset(0x00) = size }
+        self.inner_slice_mut()[0] = size;
+    }
+
+    fn read_request_code(&self) -> u32 {
+        self.inner_slice()[1]
+    }
+
+    fn write_request_code(&mut self, code: u32) {
+        self.inner_slice_mut()[1] = code;
+    }
+
+    pub fn write_tag(&mut self, tag: &[u32]) -> Result<usize> {
+        let mut offset = 2;
+        let slice_mut = self.inner_slice_mut();
+
+        while slice_mut[offset] != TAG_LAST && offset < slice_mut.len() {
+            offset += 1;
+        }
+
+        if offset + tag.len() >= slice_mut.len() {
+            return Err("Mailbox buffer is full".into());
+        }
+
+        for (i, &value) in tag.iter().enumerate() {
+            slice_mut[offset + i] = value;
+        }
+
+        self.write_size((offset + tag.len()) as u32 * 4);
+
+        Ok(offset)
+    }
+
+    pub fn call(&self, channel: Channel) -> Result<()> {
+        // wait until can write to the mailbox
+        while read_mailbox_status() & 0x80000000 != 0 {}
+
+        // write
+        write_mailbox(self, channel);
+
+        loop {
+            // wait until can read from the mailbox
+            while read_mailbox_status() & 0x40000000 != 0 {}
+            let res = read_mailbox_rw();
+
+            if ((res & 0xf) == channel as u32) && ((res & !0xf) == self.inner_ptr() as u32) {
+                break;
+            }
+        }
+
+        let status = self.read_request_code();
+        if status == TagStatus::Response as u32 {
+            Ok(())
+        } else if status == TagStatus::ResponseError as u32 {
+            Err("Mailbox response error".into())
+        } else {
+            Err("Unknown mailbox response".into())
+        }
     }
 }
