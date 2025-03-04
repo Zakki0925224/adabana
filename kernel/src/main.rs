@@ -3,7 +3,6 @@
 #![feature(sync_unsafe_cell)]
 
 use addr::VirtualAddress;
-use cpu::CpuModel;
 use device_tree::DeviceTree;
 
 mod addr;
@@ -15,6 +14,7 @@ mod device_tree;
 mod error;
 mod fdt;
 mod gpio;
+mod mailbox;
 mod mutex;
 mod panic;
 mod uart;
@@ -29,12 +29,7 @@ pub extern "C" fn kernel_main() -> ! {
 
 fn kernel_main2(fdt_addr: VirtualAddress) -> error::Result<()> {
     let _device_tree = DeviceTree::new(fdt_addr)?;
-
-    let cpu_model = cpu::detect_cpu_model();
-    match cpu_model {
-        CpuModel::CortexA53 => (),
-        _ => return Err(error::Error::UnsupportedCpuModel(cpu_model)),
-    }
+    let cpu_model = cpu::detect_cpu_model()?;
 
     uart::init()?;
 
