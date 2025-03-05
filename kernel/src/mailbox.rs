@@ -1,43 +1,42 @@
-use crate::{addr::MmioAddress, error::Result};
+use crate::{addr::MmioAddress, error::Result, println};
 
 // https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface
+// https://github.com/qemu/qemu/blob/master/hw/misc/bcm2835_property.c
 
-fn mmio_base_mailbox_videocore() -> MmioAddress {
+fn mmio_base_mailbox() -> MmioAddress {
     MmioAddress::new(0xb880)
 }
 
 fn read_mailbox_rw() -> u32 {
-    mmio_base_mailbox_videocore().offset(0x00).read()
+    mmio_base_mailbox().offset(0x00).read()
 }
 
 fn read_mailbox_peek() -> u32 {
-    mmio_base_mailbox_videocore().offset(0x10).read()
+    mmio_base_mailbox().offset(0x10).read()
 }
 
 fn read_mailbox_sender() -> u32 {
-    mmio_base_mailbox_videocore().offset(0x14).read()
+    mmio_base_mailbox().offset(0x14).read()
 }
 
 fn read_mailbox_status() -> u32 {
-    mmio_base_mailbox_videocore().offset(0x18).read()
+    mmio_base_mailbox().offset(0x18).read()
 }
 
 fn read_mailbox_config() -> u32 {
-    mmio_base_mailbox_videocore().offset(0x1c).read()
+    mmio_base_mailbox().offset(0x1c).read()
 }
 
 fn write_mailbox(mbox: &Mailbox, channel: Channel) {
     let mbox_addr = mbox.inner_ptr() as u32;
     assert!(mbox_addr & 0xf == 0);
     let channel = channel as u32;
-    mmio_base_mailbox_videocore()
-        .offset(0x20)
-        .write(mbox_addr | channel);
+    mmio_base_mailbox().offset(0x20).write(mbox_addr | channel);
 }
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub enum Channel {
+enum Channel {
     PowerManagement = 0,
     Framebuffer = 1,
     VirtualUart = 2,
@@ -50,7 +49,7 @@ pub enum Channel {
 }
 
 #[repr(u32)]
-pub enum TagId {
+enum TagId {
     VideoCoreGetFirmwareVersion = 0x1,
     HardwareGetBoardModel = 0x10001,
     HardwareGetBoardRevision = 0x10002,
@@ -123,45 +122,46 @@ pub enum TagId {
 }
 
 #[repr(u32)]
-pub enum TagStatus {
+enum TagStatus {
     Request = 0,
     Response = 0x80000000,
     ResponseError = 0x80000001,
 }
 
-pub const TAG_LAST: u32 = 0;
+const TAG_LAST: u32 = 0;
 
 #[repr(C)]
-pub struct Tag<const N: usize>([u32; N]);
+struct Tag<const N: usize>([u32; N]);
 
 impl<const N: usize> Tag<N> {
-    pub fn new(id: TagId, status: TagStatus) -> Self {
+    fn new(id: TagId, status: TagStatus) -> Self {
         assert!(N >= 4);
 
         let mut tags = [0; N];
         tags[0] = id as u32;
-        tags[1] = status as u32;
+        tags[1] = ((N - 3) * 4) as u32;
+        tags[2] = status as u32;
         Self(tags)
     }
 
-    pub fn slice(&self) -> &[u32] {
+    fn slice(&self) -> &[u32] {
         &self.0
     }
 
-    pub fn slice_mut(&mut self) -> &mut [u32] {
+    fn slice_mut(&mut self) -> &mut [u32] {
         &mut self.0
     }
 }
 
 #[repr(C, align(16))]
-pub struct Mailbox([u32; 36]);
+struct Mailbox([u32; 36]);
 
 impl Mailbox {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self([0; 36])
     }
 
-    pub fn inner_slice(&self) -> &[u32] {
+    fn inner_slice(&self) -> &[u32] {
         &self.0
     }
 
@@ -189,7 +189,7 @@ impl Mailbox {
         self.inner_slice_mut()[1] = code;
     }
 
-    pub fn write_tag(&mut self, tag: &[u32]) -> Result<usize> {
+    fn write_tag(&mut self, tag: &[u32]) -> Result<usize> {
         let mut offset = 2;
         let slice_mut = self.inner_slice_mut();
 
@@ -205,12 +205,14 @@ impl Mailbox {
             slice_mut[offset + i] = value;
         }
 
-        self.write_size((offset + tag.len()) as u32 * 4);
+        self.write_size(self.read_size() + tag.len() as u32 * 4);
 
         Ok(offset)
     }
 
-    pub fn call(&self, channel: Channel) -> Result<()> {
+    fn call(&self, channel: Channel) -> Result<()> {
+        // println!("mailbox: {:?}", self.inner_slice());
+
         // wait until can write to the mailbox
         while read_mailbox_status() & 0x80000000 != 0 {}
 
@@ -229,6 +231,7 @@ impl Mailbox {
 
         let status = self.read_request_code();
         if status == TagStatus::Response as u32 {
+            // println!("mailbox: {:?}", self.inner_slice());
             Ok(())
         } else if status == TagStatus::ResponseError as u32 {
             Err("Mailbox response error".into())
@@ -236,4 +239,42 @@ impl Mailbox {
             Err("Unknown mailbox response".into())
         }
     }
+}
+
+pub fn get_firmware_revision() -> Result<u32> {
+    let mut mbox = Mailbox::new();
+    let mut tag: Tag<5> = Tag::new(TagId::VideoCoreGetFirmwareVersion, TagStatus::Request);
+    let tag_s = tag.slice_mut();
+    tag_s[3] = 0; // response buffer
+    tag_s[4] = TAG_LAST; // last
+    let offset = mbox.write_tag(tag.slice())?;
+    mbox.call(Channel::PropertyTags)?;
+    let tag_s: &[u32] = &mbox.inner_slice()[offset..offset + 5];
+
+    if tag_s[2] & TagStatus::Response as u32 == 0 {
+        return Err("Mailbox response error".into());
+    }
+
+    Ok(tag_s[3])
+}
+
+pub fn get_board_serial() -> Result<u64> {
+    let mut mbox = Mailbox::new();
+    let mut tag: Tag<8> = Tag::new(TagId::HardwareGetBoardSerial, TagStatus::Request);
+    let tag_s = tag.slice_mut();
+    tag_s[3] = 8; // buffer size
+    tag_s[4] = 8; // response buffer size
+    tag_s[5] = 0; // response buffer
+    tag_s[6] = 0;
+    tag_s[7] = TAG_LAST; // last
+    let offset = mbox.write_tag(tag.slice())?;
+    mbox.call(Channel::PropertyTags)?;
+    let tag_s: &[u32] = &mbox.inner_slice()[offset..offset + 8];
+
+    if tag_s[2] & TagStatus::Response as u32 == 0 {
+        return Err("Mailbox response error".into());
+    }
+
+    let serial = (tag_s[6] as u64) << 32 | tag_s[5] as u64;
+    Ok(serial)
 }

@@ -4,7 +4,6 @@
 
 use addr::VirtualAddress;
 use device_tree::DeviceTree;
-use mailbox::{Channel, Mailbox, Tag, TagId, TagStatus};
 
 mod addr;
 mod asm;
@@ -36,18 +35,11 @@ fn kernel_main2(fdt_addr: VirtualAddress) -> error::Result<()> {
 
     println!("Starting kernel...");
     println!("CPU: {:?}", cpu_model);
-
-    let mut mbox = Mailbox::new();
-    let mut tag: Tag<10> = Tag::new(TagId::HardwareGetBoardSerial, TagStatus::Request);
-    let tag_s = tag.slice_mut();
-    tag_s[2] = 8; // buffer size
-    tag_s[3] = 8;
-    tag_s[4] = 0; // output buffer
-    tag_s[5] = 0;
-    tag_s[6] = mailbox::TAG_LAST; // last
-    let offset = mbox.write_tag(tag.slice())?;
-    mbox.call(Channel::PropertyTags)?;
-    println!("response: {:?}", &mbox.inner_slice()[offset..offset + 10]);
+    println!(
+        "Firmware revision: 0x{:x}",
+        mailbox::get_firmware_revision()?
+    );
+    println!("Board serial: 0x{:x}", mailbox::get_board_serial()?);
 
     loop {
         let c = uart::receive()?;
