@@ -24,7 +24,7 @@ QEMU_ARGS = [
     "-no-reboot",
     "-no-shutdown",
     "-m 1G",
-    "-display none",
+    # "-display none",
     "-serial null -serial stdio",  # PL011 -> Mini UART
     "-monitor telnet::5678,server,nowait",
     "-gdb tcp::3333",

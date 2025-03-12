@@ -1,6 +1,5 @@
-use core::fmt::Display;
-
 use crate::{asm, cpu};
+use core::fmt::{Debug, Display};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(transparent)]
@@ -28,7 +27,7 @@ impl MmioAddress {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 #[repr(transparent)]
 pub struct VirtualAddress(u64);
 
@@ -39,6 +38,12 @@ impl From<u64> for VirtualAddress {
 }
 
 impl Display for VirtualAddress {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "0x{:x}", self.0)
+    }
+}
+
+impl Debug for VirtualAddress {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "0x{:x}", self.0)
     }

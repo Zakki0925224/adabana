@@ -1,4 +1,8 @@
-use crate::{addr::MmioAddress, error::Result, println};
+use crate::{
+    addr::{MmioAddress, VirtualAddress},
+    error::Result,
+    framebuffer::{FramebufferInfo, PixelFormat},
+};
 
 // https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface
 // https://github.com/qemu/qemu/blob/master/hw/misc/bcm2835_property.c
@@ -231,7 +235,6 @@ impl Mailbox {
 
         let status = self.read_request_code();
         if status == TagStatus::Response as u32 {
-            // println!("mailbox: {:?}", self.inner_slice());
             Ok(())
         } else if status == TagStatus::ResponseError as u32 {
             Err("Mailbox response error".into())
@@ -258,23 +261,110 @@ pub fn get_firmware_revision() -> Result<u32> {
     Ok(tag_s[3])
 }
 
-pub fn get_board_serial() -> Result<u64> {
-    let mut mbox = Mailbox::new();
-    let mut tag: Tag<8> = Tag::new(TagId::HardwareGetBoardSerial, TagStatus::Request);
-    let tag_s = tag.slice_mut();
-    tag_s[3] = 8; // buffer size
-    tag_s[4] = 8; // response buffer size
-    tag_s[5] = 0; // response buffer
-    tag_s[6] = 0;
-    tag_s[7] = TAG_LAST; // last
-    let offset = mbox.write_tag(tag.slice())?;
-    mbox.call(Channel::PropertyTags)?;
-    let tag_s: &[u32] = &mbox.inner_slice()[offset..offset + 8];
+// https://jsandler18.github.io/extra/prop-channel.html
+pub fn init_framebuffer(
+    scr_wh: (u32, u32),
+    virt_scr_wh: (u32, u32),
+    depth: u32,
+    pixel_format: PixelFormat,
+) -> Result<FramebufferInfo> {
+    let mut info = FramebufferInfo::default();
 
-    if tag_s[2] & TagStatus::Response as u32 == 0 {
-        return Err("Mailbox response error".into());
+    // set physical width-height
+    {
+        let mut mbox = Mailbox::new();
+        let mut tag: Tag<6> =
+            Tag::new(TagId::FramebufferSetPhysicalWidthHeight, TagStatus::Request);
+        let tag_s = tag.slice_mut();
+        tag_s[3] = scr_wh.0; // width
+        tag_s[4] = scr_wh.1; // height
+        tag_s[5] = TAG_LAST; // last
+        let offset = mbox.write_tag(tag.slice())?;
+        mbox.call(Channel::PropertyTags)?;
+        let tag_s: &[u32] = &mbox.inner_slice()[offset..offset + 6];
+
+        if tag_s[2] & TagStatus::Response as u32 == 0 {
+            return Err("Mailbox response error".into());
+        }
+
+        info.p_width = tag_s[3] as usize;
+        info.p_height = tag_s[4] as usize;
     }
 
-    let serial = (tag_s[6] as u64) << 32 | tag_s[5] as u64;
-    Ok(serial)
+    // set virtual width-height
+    {
+        let mut mbox = Mailbox::new();
+        let mut tag: Tag<6> = Tag::new(TagId::FramebufferSetVirtualWidthHeight, TagStatus::Request);
+        let tag_s = tag.slice_mut();
+        tag_s[3] = virt_scr_wh.0; // width
+        tag_s[4] = virt_scr_wh.1; // height
+        tag_s[5] = TAG_LAST; // last
+        let offset = mbox.write_tag(tag.slice())?;
+        mbox.call(Channel::PropertyTags)?;
+        let tag_s: &[u32] = &mbox.inner_slice()[offset..offset + 6];
+
+        if tag_s[2] & TagStatus::Response as u32 == 0 {
+            return Err("Mailbox response error".into());
+        }
+
+        info.v_width = tag_s[3] as usize;
+        info.v_height = tag_s[4] as usize;
+    }
+
+    // set depth
+    {
+        let mut mbox = Mailbox::new();
+        let mut tag: Tag<5> = Tag::new(TagId::FramebufferSetDepth, TagStatus::Request);
+        let tag_s = tag.slice_mut();
+        tag_s[3] = depth; // depth
+        tag_s[4] = TAG_LAST; // last
+        let offset = mbox.write_tag(tag.slice())?;
+        mbox.call(Channel::PropertyTags)?;
+        let tag_s: &[u32] = &mbox.inner_slice()[offset..offset + 5];
+
+        if tag_s[2] & TagStatus::Response as u32 == 0 {
+            return Err("Mailbox response error".into());
+        }
+
+        info.depth = tag_s[3] as usize;
+    }
+
+    // set pixel order
+    {
+        let mut mbox = Mailbox::new();
+        let mut tag: Tag<5> = Tag::new(TagId::FramebufferSetPixelOrder, TagStatus::Request);
+        let tag_s = tag.slice_mut();
+        tag_s[3] = pixel_format as u32; // pixel format
+        tag_s[4] = TAG_LAST; // last
+        let offset = mbox.write_tag(tag.slice())?;
+        mbox.call(Channel::PropertyTags)?;
+        let tag_s: &[u32] = &mbox.inner_slice()[offset..offset + 5];
+
+        if tag_s[2] & TagStatus::Response as u32 == 0 {
+            return Err("Mailbox response error".into());
+        }
+
+        info.pixel_format = PixelFormat::try_from(tag_s[3])?;
+    }
+
+    // allocate framebuffer
+    {
+        let mut mbox = Mailbox::new();
+        let mut tag: Tag<5> = Tag::new(TagId::FramebufferAllocateBuffer, TagStatus::Request);
+        let tag_s = tag.slice_mut();
+        tag_s[3] = 16; // alignment in bytes
+        tag_s[4] = TAG_LAST; // last
+        let offset = mbox.write_tag(tag.slice())?;
+        mbox.call(Channel::PropertyTags)?;
+        let tag_s: &[u32] = &mbox.inner_slice()[offset..offset + 5];
+
+        if tag_s[2] & TagStatus::Response as u32 == 0 {
+            return Err("Mailbox response error".into());
+        }
+
+        info.buf_base = VirtualAddress::new(tag_s[3] as u64);
+        info.buf_size = tag_s[4] as usize;
+    }
+
+    Ok(info)
 }
