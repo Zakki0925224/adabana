@@ -3,6 +3,7 @@ use crate::{
     color::ColorCode,
     draw::Draw,
     error::{Error, Result},
+    font::{FONT, TAB_DISP_STR},
     mutex::Mutex,
 };
 
@@ -88,24 +89,59 @@ impl Draw for Framebuffer {
 
     fn draw_string(
         &mut self,
-        _x: usize,
-        _y: usize,
-        _s: &str,
-        _fore_color: ColorCode,
-        _back_color: ColorCode,
+        x: usize,
+        y: usize,
+        s: &str,
+        fore_color: ColorCode,
+        back_color: ColorCode,
     ) -> Result<()> {
-        unimplemented!()
+        let mut char_x = x;
+        let mut char_y = y;
+
+        for c in s.chars() {
+            match c {
+                '\n' => {
+                    char_y += FONT.get_height();
+                    continue;
+                }
+                '\t' => {
+                    for c in TAB_DISP_STR.chars() {
+                        self.draw_font(char_x, char_y, c, fore_color, back_color)?;
+                        char_x += FONT.get_width();
+                    }
+                }
+                _ => (),
+            }
+
+            self.draw_font(char_x, char_y, c, fore_color, back_color)?;
+            char_x += FONT.get_width();
+        }
+
+        Ok(())
     }
 
     fn draw_font(
         &mut self,
-        _x: usize,
-        _y: usize,
-        _c: char,
-        _fore_color: ColorCode,
-        _back_color: ColorCode,
+        x: usize,
+        y: usize,
+        c: char,
+        fore_color: ColorCode,
+        back_color: ColorCode,
     ) -> Result<()> {
-        todo!()
+        let glyph = FONT.get_glyph(c)?;
+
+        for h in 0..FONT.get_height() {
+            for w in 0..FONT.get_width() {
+                let color = if (glyph[h] << w) & 0x80 == 0x80 {
+                    fore_color
+                } else {
+                    back_color
+                };
+                self.draw_rect(x + w, y + h, 1, 1, color)?;
+            }
+        }
+
+        Ok(())
     }
 
     fn fill(&mut self, color: ColorCode) -> Result<()> {
@@ -154,4 +190,14 @@ pub fn fill(color: ColorCode) -> Result<()> {
 
 pub fn draw_rect(x: usize, y: usize, width: usize, height: usize, color: ColorCode) -> Result<()> {
     unsafe { FB.try_lock() }?.draw_rect(x, y, width, height, color)
+}
+
+pub fn draw_string(
+    x: usize,
+    y: usize,
+    s: &str,
+    fore_color: ColorCode,
+    back_color: ColorCode,
+) -> Result<()> {
+    unsafe { FB.try_lock() }?.draw_string(x, y, s, fore_color, back_color)
 }

@@ -10,6 +10,8 @@ THIRD_PARTY_DIR = "third-party"
 KERNEL_FILE = "kernel8.img"
 KERNEL_OUT = "target/aarch64-raspi3-kernel/debug/kernel"
 DTB_FILE = "bcm2710-rpi-3-b.dtb"
+FONT_FILE = "font.psf"
+COZETTE_BDF = "cozette.bdf"
 
 ARCH_TOOLCHAIN = "aarch64-linux-gnu-"
 
@@ -69,10 +71,24 @@ def init():
         )
 
 
+def build_cozette():
+    d = f"./{THIRD_PARTY_DIR}"
+
+    if not os.path.exists(f"{d}/{FONT_FILE}"):
+        run_cmd(
+            f'wget -qO- https://api.github.com/repos/slavfox/Cozette/releases/latest | grep "{COZETTE_BDF}" | cut -d : -f 2,3 | tr -d \\" | wget -O ./{COZETTE_BDF} -i -',
+            dir=d,
+            ignore_error=True,
+        )
+        run_cmd(
+            f"bdf2psf --fb ./{COZETTE_BDF} /usr/share/bdf2psf/standard.equivalents /usr/share/bdf2psf/fontsets/Uni2.512 512 ./{FONT_FILE}",
+            dir=d,
+        )
+        run_cmd(f"rm ./{COZETTE_BDF}", dir=d)
+
+
 def build_kernel():
     d = f"./{KERNEL_DIR}"
-
-    init()
     run_cmd("cargo build", d)
     run_cmd(
         f"{ARCH_TOOLCHAIN}objcopy --strip-all -O binary {KERNEL_OUT} {OUTPUT_DIR}/{KERNEL_FILE}"
@@ -80,6 +96,8 @@ def build_kernel():
 
 
 def build():
+    init()
+    build_cozette()
     build_kernel()
 
 
@@ -116,6 +134,7 @@ def clean():
 TASKS = [
     init,
     build_kernel,
+    build_cozette,
     build,
     run,
     run_with_gdb,

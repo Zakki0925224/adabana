@@ -17,6 +17,7 @@ mod device_tree;
 mod draw;
 mod error;
 mod fdt;
+mod font;
 mod framebuffer;
 mod gpio;
 mod mailbox;
@@ -45,13 +46,20 @@ fn kernel_main2(fdt_addr: VirtualAddress) -> error::Result<()> {
         mailbox::get_firmware_revision()?
     );
 
-    let fb_info = mailbox::init_framebuffer((640, 480), (640, 480), 32, PixelFormat::default())?;
+    let fb_info = mailbox::init_framebuffer((480, 320), (480, 320), 32, PixelFormat::default())?;
     println!("Framebuffer: {:?}", fb_info);
     framebuffer::init(fb_info)?;
     framebuffer::fill(ColorCode::new(255, 255, 255))?;
     framebuffer::draw_rect(100, 100, 50, 50, ColorCode::new(255, 0, 0))?;
-    framebuffer::draw_rect(323, 215, 200, 200, ColorCode::new(0, 255, 0))?;
-    framebuffer::draw_rect(415, 300, 100, 100, ColorCode::new(0, 0, 255))?;
+    framebuffer::draw_rect(125, 215, 100, 100, ColorCode::new(0, 255, 0))?;
+    framebuffer::draw_rect(370, 10, 100, 100, ColorCode::new(0, 0, 255))?;
+    framebuffer::draw_string(
+        0,
+        0,
+        "Hello, world!",
+        ColorCode::new(255, 255, 255),
+        ColorCode::new(0, 0, 0),
+    )?;
 
     loop {
         let c = uart::receive()?;
