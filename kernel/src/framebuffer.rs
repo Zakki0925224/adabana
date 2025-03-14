@@ -95,26 +95,28 @@ impl Draw for Framebuffer {
         fore_color: ColorCode,
         back_color: ColorCode,
     ) -> Result<()> {
+        let (font_width, font_height) = FONT.get_wh();
+
         let mut char_x = x;
         let mut char_y = y;
 
         for c in s.chars() {
             match c {
                 '\n' => {
-                    char_y += FONT.get_height();
+                    char_y += font_height;
                     continue;
                 }
                 '\t' => {
                     for c in TAB_DISP_STR.chars() {
                         self.draw_font(char_x, char_y, c, fore_color, back_color)?;
-                        char_x += FONT.get_width();
+                        char_x += font_width;
                     }
                 }
                 _ => (),
             }
 
             self.draw_font(char_x, char_y, c, fore_color, back_color)?;
-            char_x += FONT.get_width();
+            char_x += font_width;
         }
 
         Ok(())
@@ -129,9 +131,10 @@ impl Draw for Framebuffer {
         back_color: ColorCode,
     ) -> Result<()> {
         let glyph = FONT.get_glyph(c)?;
+        let (font_width, font_height) = FONT.get_wh();
 
-        for h in 0..FONT.get_height() {
-            for w in 0..FONT.get_width() {
+        for h in 0..font_height {
+            for w in 0..font_width {
                 let color = if (glyph[h] << w) & 0x80 == 0x80 {
                     fore_color
                 } else {
@@ -192,12 +195,16 @@ pub fn draw_rect(x: usize, y: usize, width: usize, height: usize, color: ColorCo
     unsafe { FB.try_lock() }?.draw_rect(x, y, width, height, color)
 }
 
-pub fn draw_string(
+pub fn draw_font(
     x: usize,
     y: usize,
-    s: &str,
+    c: char,
     fore_color: ColorCode,
     back_color: ColorCode,
 ) -> Result<()> {
-    unsafe { FB.try_lock() }?.draw_string(x, y, s, fore_color, back_color)
+    unsafe { FB.try_lock() }?.draw_font(x, y, c, fore_color, back_color)
+}
+
+pub fn get_info() -> Result<FramebufferInfo> {
+    unsafe { FB.try_lock() }?.info()
 }

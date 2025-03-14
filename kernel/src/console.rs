@@ -1,4 +1,4 @@
-use crate::{error::Result, mutex::Mutex, uart};
+use crate::{error::Result, framebuffer_console, mutex::Mutex, uart};
 use core::fmt::{self, Write};
 
 static mut CONSOLE: Mutex<Console> = Mutex::new(Console {});
@@ -23,6 +23,8 @@ pub fn _print(args: fmt::Arguments) {
     if let Ok(mut console) = unsafe { CONSOLE.try_lock() } {
         let _ = console.write_fmt(args);
     }
+
+    let _ = framebuffer_console::write_fmt(args);
 }
 
 #[macro_export]

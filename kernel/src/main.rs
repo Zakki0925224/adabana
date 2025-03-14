@@ -19,6 +19,7 @@ mod error;
 mod fdt;
 mod font;
 mod framebuffer;
+mod framebuffer_console;
 mod gpio;
 mod mailbox;
 mod mutex;
@@ -47,22 +48,13 @@ fn kernel_main2(fdt_addr: VirtualAddress) -> error::Result<()> {
     );
 
     let fb_info = mailbox::init_framebuffer((480, 320), (480, 320), 32, PixelFormat::default())?;
-    println!("Framebuffer: {:?}", fb_info);
     framebuffer::init(fb_info)?;
-    framebuffer::fill(ColorCode::new(255, 255, 255))?;
-    framebuffer::draw_rect(100, 100, 50, 50, ColorCode::new(255, 0, 0))?;
-    framebuffer::draw_rect(125, 215, 100, 100, ColorCode::new(0, 255, 0))?;
-    framebuffer::draw_rect(370, 10, 100, 100, ColorCode::new(0, 0, 255))?;
-    framebuffer::draw_string(
-        0,
-        0,
-        "Hello, world!",
-        ColorCode::new(255, 255, 255),
-        ColorCode::new(0, 0, 0),
-    )?;
+    framebuffer_console::init(ColorCode::GREEN, ColorCode::BLACK)?;
+    println!("Framebuffer: {:?}", fb_info);
 
     loop {
         let c = uart::receive()?;
         uart::send(c)?;
+        print!("{}", c);
     }
 }
