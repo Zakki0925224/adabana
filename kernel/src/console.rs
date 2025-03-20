@@ -1,30 +1,20 @@
-use crate::{error::Result, framebuffer_console, mutex::Mutex, uart};
+use crate::{framebuffer_console, mutex::Mutex, uart};
 use core::fmt::{self, Write};
 
-static mut CONSOLE: Mutex<Console> = Mutex::new(Console {});
+static mut CONSOLE: Console = Console {};
 
 struct Console;
 
 impl fmt::Write for Console {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        for c in s.chars() {
-            self.write(c);
-        }
+        let _ = uart::puts(s);
         Ok(())
-    }
-}
-impl Console {
-    fn write(&mut self, c: char) -> Result<()> {
-        uart::send(c)
     }
 }
 
 pub fn _print(args: fmt::Arguments) {
-    if let Ok(mut console) = unsafe { CONSOLE.try_lock() } {
-        let _ = console.write_fmt(args);
-    }
-
-    let _ = framebuffer_console::write_fmt(args);
+    let _ = unsafe { CONSOLE.write_fmt(args) };
+    // let _ = framebuffer_console::write_fmt(args);
 }
 
 #[macro_export]

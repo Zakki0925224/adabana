@@ -9,7 +9,7 @@ THIRD_PARTY_DIR = "third-party"
 
 KERNEL_FILE = "kernel8.img"
 KERNEL_OUT = "target/aarch64-raspi3-kernel/debug/kernel"
-DTB_FILE = "bcm2710-rpi-3-b.dtb"
+DTB_FILE = "bcm2710-rpi-3-b-plus.dtb"
 FONT_FILE = "font.psf"
 COZETTE_BDF = "cozette.bdf"
 
@@ -26,8 +26,8 @@ QEMU_ARGS = [
     "-no-reboot",
     "-no-shutdown",
     "-m 1G",
-    # "-display none",
-    "-serial null -serial stdio",  # PL011 -> Mini UART
+    "-serial stdio",  # PL011
+    # "-serial null -serial stdio",  # Mini UART
     "-monitor telnet::5678,server,nowait",
     "-gdb tcp::3333",
 ]

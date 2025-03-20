@@ -6,7 +6,8 @@ SECTIONS
 
     .text :
     {
-        KEEP(*(.text.boot)) *(.text .text.*)
+        KEEP(*(.text.boot))
+        *(.text .text.*)
     }
 
     .rodata :
@@ -27,7 +28,13 @@ SECTIONS
         *(COMMON)
     }
 
-   /DISCARD/ : { *(.comment) *(.gnu*) *(.note*) *(.eh_frame*) }
+   /DISCARD/ :
+   {
+        *(.comment)
+        *(.gnu*)
+        *(.note*)
+        *(.eh_frame*)
+   }
 }
 
 __bss_start = ADDR(.bss);

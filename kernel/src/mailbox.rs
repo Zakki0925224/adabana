@@ -126,6 +126,24 @@ enum TagId {
 }
 
 #[repr(u32)]
+pub enum ClockId {
+    Emmc = 0x1,
+    Uart = 0x2,
+    Arm = 0x3,
+    Core = 0x4,
+    V3d = 0x5,
+    H264 = 0x6,
+    Isp = 0x7,
+    Sdram = 0x8,
+    Pixel = 0x9,
+    Pwm = 0xa,
+    Hevc = 0xb,
+    Emmc2 = 0xc,
+    M2mc = 0xd,
+    PixelBvb = 0xe,
+}
+
+#[repr(u32)]
 enum TagStatus {
     Request = 0,
     Response = 0x80000000,
@@ -367,4 +385,23 @@ pub fn init_framebuffer(
     }
 
     Ok(info)
+}
+
+pub fn set_clock_rate(clock_id: ClockId, rate: u32) -> Result<()> {
+    let mut mbox = Mailbox::new();
+    let mut tag: Tag<7> = Tag::new(TagId::ClocksSetClockRate, TagStatus::Request);
+    let tag_s = tag.slice_mut();
+    tag_s[3] = clock_id as u32; // clock id
+    tag_s[4] = rate; // rate
+    tag_s[5] = 0; // skip turbo
+    tag_s[6] = TAG_LAST; // last
+    let offset = mbox.write_tag(tag.slice())?;
+    mbox.call(Channel::PropertyTags)?;
+    let tag_s: &[u32] = &mbox.inner_slice()[offset..offset + 7];
+
+    if tag_s[2] & TagStatus::Response as u32 == 0 {
+        return Err("Mailbox response error".into());
+    }
+
+    Ok(())
 }

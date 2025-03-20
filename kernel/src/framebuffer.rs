@@ -7,7 +7,7 @@ use crate::{
     mutex::Mutex,
 };
 
-static mut FB: Mutex<Framebuffer> = Mutex::new(Framebuffer::new());
+static mut FB: Framebuffer = Framebuffer::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -183,16 +183,16 @@ impl Draw for Framebuffer {
 }
 
 pub fn init(info: FramebufferInfo) -> Result<()> {
-    unsafe { FB.try_lock() }?.init(info);
+    unsafe { FB.init(info) };
     Ok(())
 }
 
 pub fn fill(color: ColorCode) -> Result<()> {
-    unsafe { FB.try_lock() }?.fill(color)
+    unsafe { FB.fill(color) }
 }
 
 pub fn draw_rect(x: usize, y: usize, width: usize, height: usize, color: ColorCode) -> Result<()> {
-    unsafe { FB.try_lock() }?.draw_rect(x, y, width, height, color)
+    unsafe { FB.draw_rect(x, y, width, height, color) }
 }
 
 pub fn draw_font(
@@ -202,9 +202,9 @@ pub fn draw_font(
     fore_color: ColorCode,
     back_color: ColorCode,
 ) -> Result<()> {
-    unsafe { FB.try_lock() }?.draw_font(x, y, c, fore_color, back_color)
+    unsafe { FB.draw_font(x, y, c, fore_color, back_color) }
 }
 
 pub fn get_info() -> Result<FramebufferInfo> {
-    unsafe { FB.try_lock() }?.info()
+    unsafe { FB.info() }
 }
