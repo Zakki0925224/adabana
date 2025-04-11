@@ -1,7 +1,9 @@
 use crate::{addr::MmioAddress, asm, error::Result, gpio, mailbox, mutex::Mutex};
 
-static mut MINI_UART: MiniUart = MiniUart::new();
-static mut PL011_UART: Pl011Uart = Pl011Uart::new();
+static mut MINI_UART: Mutex<MiniUart> = Mutex::new(MiniUart::new());
+static mut PL011_UART: Mutex<Pl011Uart> = Mutex::new(Pl011Uart::new());
+
+static mut PL011_DEBUG_UART: Pl011Uart = Pl011Uart::new();
 
 fn mmio_base_mini_uart() -> MmioAddress {
     MmioAddress::new(0x215000)
@@ -302,24 +304,30 @@ impl Pl011Uart {
 
 pub fn init() -> Result<()> {
     // unsafe { MINI_UART.try_lock() }?.init();
-    unsafe { PL011_UART.init()? };
+    unsafe { PL011_UART.try_lock() }?.init()?;
     Ok(())
 }
 
 pub fn receive() -> Result<char> {
     // let c = unsafe { MINI_UART.try_lock() }?.receive();
-    let c = unsafe { PL011_UART.receive() };
+    let c = unsafe { PL011_UART.try_lock() }?.receive();
     Ok(c)
 }
 
 pub fn send(c: char) -> Result<()> {
     // unsafe { MINI_UART.try_lock() }?.send(c);
-    unsafe { PL011_UART.send(c) };
+    unsafe { PL011_UART.try_lock() }?.send(c);
     Ok(())
 }
 
 pub fn puts(s: &str) -> Result<()> {
     // unsafe { MINI_UART.try_lock() }?.puts(s);
-    unsafe { PL011_UART.puts(s) };
+    unsafe { PL011_UART.try_lock() }?.puts(s);
     Ok(())
+}
+
+pub fn debug_puts(s: &str) {
+    unsafe { PL011_DEBUG_UART.puts("[DEBUG]: ") };
+    unsafe { PL011_DEBUG_UART.puts(s) };
+    unsafe { PL011_DEBUG_UART.puts("\n") };
 }

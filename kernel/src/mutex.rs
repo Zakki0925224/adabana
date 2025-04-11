@@ -1,37 +1,42 @@
-use crate::error::Result;
+use crate::{asm, error::Result};
 use core::{
-    cell::SyncUnsafeCell,
+    cell::{SyncUnsafeCell, UnsafeCell},
     ops::{Deref, DerefMut},
-    sync::atomic::{AtomicBool, Ordering},
 };
 
 pub struct Mutex<T> {
     value: SyncUnsafeCell<T>,
-    locked: AtomicBool,
+    locked: UnsafeCell<bool>, // cannot use AtomicBool
 }
 
 impl<T: Sized> Mutex<T> {
     pub const fn new(value: T) -> Self {
         Self {
             value: SyncUnsafeCell::new(value),
-            locked: AtomicBool::new(false),
+            locked: UnsafeCell::new(false),
         }
     }
 
     pub fn try_lock(&self) -> Result<MutexGuard<T>> {
-        if self
-            .locked
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
-            .is_ok()
-        {
-            return Ok(unsafe { MutexGuard::new(self, &self.value) });
-        }
+        asm::disabled_int(|| {
+            if !self.locked() {
+                self.set_locked(true);
+                return Ok(unsafe { MutexGuard::new(self, &self.value) });
+            }
 
-        Err("Mutex is already locked".into())
+            Err("Mutex is already locked".into())
+        })
     }
 
-    pub unsafe fn get_force_mut(&mut self) -> &mut T {
-        self.value.get_mut()
+    fn locked(&self) -> bool {
+        unsafe { *self.locked.get() }
+    }
+
+    fn set_locked(&self, locked: bool) {
+        unsafe {
+            *self.locked.get() = locked;
+        }
+        assert_eq!(self.locked(), locked);
     }
 }
 
@@ -69,6 +74,6 @@ impl<'a, T> DerefMut for MutexGuard<'a, T> {
 
 impl<'a, T> Drop for MutexGuard<'a, T> {
     fn drop(&mut self) {
-        self.mutex.locked.store(false, Ordering::Relaxed);
+        asm::disabled_int(|| self.mutex.set_locked(false));
     }
 }

@@ -43,3 +43,10 @@ pub fn read_x0() -> u64 {
 
     value
 }
+
+pub fn disabled_int<F: FnMut() -> R, R>(mut func: F) -> R {
+    unsafe { asm!("msr daifset, #3") }; // disable IRQ and FIQ interrupts
+    let res = func();
+    unsafe { asm!("msr daifclr, #3") }; // enable IRQ and FIQ interrupts
+    res
+}

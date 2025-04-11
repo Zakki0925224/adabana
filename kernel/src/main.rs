@@ -39,11 +39,10 @@ pub extern "C" fn kernel_main() -> ! {
 }
 
 fn kernel_main2(fdt_addr: VirtualAddress) -> error::Result<()> {
-    // let _device_tree = DeviceTree::new(fdt_addr)?;
+    let _device_tree = DeviceTree::new(fdt_addr)?;
     let cpu_model = cpu::detect_cpu_model()?;
 
-    //uart::init()?;
-
+    // uart::init()?;
     println!("Starting kernel...");
     println!("FDT addr: {:?}", fdt_addr);
     println!("CPU: {:?}", cpu_model);
@@ -58,7 +57,12 @@ fn kernel_main2(fdt_addr: VirtualAddress) -> error::Result<()> {
     // println!("Framebuffer: {:?}", fb_info);
 
     loop {
-        let c = uart::receive()?;
+        let c = match uart::receive() {
+            Ok(c) => c,
+            Err(_) => {
+                continue;
+            }
+        };
         print!("{}", c);
     }
 }

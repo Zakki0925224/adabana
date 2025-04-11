@@ -7,7 +7,7 @@ use crate::{
 };
 use core::fmt::{self, Write};
 
-static mut FB_CONSOLE: FramebufferConsole = FramebufferConsole::new();
+static mut FB_CONSOLE: Mutex<FramebufferConsole> = Mutex::new(FramebufferConsole::new());
 
 struct FramebufferConsole {
     cursor_x: usize,
@@ -138,10 +138,12 @@ impl fmt::Write for FramebufferConsole {
 }
 
 pub fn init(fore_color: ColorCode, back_color: ColorCode) -> Result<()> {
-    unsafe { FB_CONSOLE.init(fore_color, back_color) }
+    let mut fb_console = unsafe { FB_CONSOLE.try_lock() }?;
+    fb_console.init(fore_color, back_color)
 }
 
 pub fn write_fmt(args: fmt::Arguments) -> Result<()> {
-    let _ = unsafe { FB_CONSOLE.write_fmt(args) };
+    let mut fb_console = unsafe { FB_CONSOLE.try_lock() }?;
+    let _ = fb_console.write_fmt(args);
     Ok(())
 }
